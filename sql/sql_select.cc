@@ -15501,7 +15501,7 @@ make_join_readinfo(JOIN *join, ulonglong options, uint no_jbuf_after)
     if (tab->bush_children)
     {
       if (setup_sj_materialization_part2(tab))
-        return TRUE;
+        DBUG_RETURN(TRUE);
     }
 
     TABLE *table=tab->table;
@@ -15524,9 +15524,10 @@ make_join_readinfo(JOIN *join, ulonglong options, uint no_jbuf_after)
 
     if (tab->loosescan_match_tab)
     {
+      DBUG_ASSERT(tab->loosescan_key_len);
       if (!(tab->loosescan_buf= (uchar*)join->thd->alloc(tab->
                                                          loosescan_key_len)))
-        return TRUE; /* purecov: inspected */
+        DBUG_RETURN(TRUE);
       tab->sorted= TRUE;
     }
     table->status=STATUS_NO_RECORD;
@@ -21820,30 +21821,6 @@ bool Create_tmp_table::finalize(THD *thd,
       goto err;
     bzero(keyinfo->rec_per_key, rpk_size);
 
-    /*
-      Create an extra field to hold NULL bits so that unique indexes on
-      blobs can distinguish NULL from 0. This extra field is not needed
-      when we do not use UNIQUE indexes for blobs.
-    */
-    if (null_pack_length[distinct] && (keyinfo->flags & HA_UNIQUE_HASH))
-    {
-      m_key_part_info->null_bit=0;
-      m_key_part_info->offset= null_pack_base[distinct];
-      m_key_part_info->length= null_pack_length[distinct];
-      m_key_part_info->field= new Field_string(table->record[0],
-                                             (uint32) m_key_part_info->length,
-                                             (uchar*) 0,
-                                             (uint) 0,
-                                             Field::NONE,
-                                             &null_clex_str, &my_charset_bin);
-      if (!m_key_part_info->field)
-        goto err;
-      m_key_part_info->field->init(table);
-      m_key_part_info->key_type=FIELDFLAG_BINARY;
-      m_key_part_info->type=    HA_KEYTYPE_BINARY;
-      m_key_part_info->fieldnr= m_key_part_info->field->field_index + 1;
-      m_key_part_info++;
-    }
     /* Create a distinct key over the columns we are going to return */
     for (i= param->hidden_field_count, reg_field= table->field + i ;
          i < share->fields;
@@ -21888,6 +21865,33 @@ bool Create_tmp_table::finalize(THD *thd,
 	 (ha_base_keytype) m_key_part_info->type == HA_KEYTYPE_VARTEXT2) ?
 	0 : FIELDFLAG_BINARY;
 
+      m_key_part_info++;
+    }
+
+    /*
+      Create an extra field to hold NULL bits so that unique indexes on
+      blobs can distinguish NULL from 0. This extra field is not needed
+      when we do not use UNIQUE indexes for blobs.
+      This needs to be last to preserve grouping when using LooseScan.
+    */
+    if (null_pack_length[distinct] && (keyinfo->flags & HA_UNIQUE_HASH))
+    {
+      m_key_part_info->null_bit=0;
+      m_key_part_info->offset= null_pack_base[distinct];
+      m_key_part_info->length= null_pack_length[distinct];
+      m_key_part_info->field= new Field_string(table->record[0],
+                                             (uint32) m_key_part_info->length,
+                                             (uchar*) 0,
+                                             (uint) 0,
+                                             Field::NONE,
+                                             &null_clex_str, &my_charset_bin);
+      if (!m_key_part_info->field)
+        goto err;
+      m_key_part_info->field->init(table);
+      m_key_part_info->key_type=FIELDFLAG_BINARY;
+      m_key_part_info->type=    HA_KEYTYPE_BINARY;
+      m_key_part_info->fieldnr= m_key_part_info->field->field_index + 1;
+      m_key_part_info->store_length= m_key_part_info->length;
       m_key_part_info++;
     }
   }
