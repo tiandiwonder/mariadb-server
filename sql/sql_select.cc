@@ -61,6 +61,7 @@
 #include <my_bit.h>
 #include <hash.h>
 #include <ft_global.h>
+#include <functional>
 #include "sys_vars_shared.h"
 #include "sp_head.h"
 #include "sp_rcontext.h"
@@ -25007,6 +25008,25 @@ int setup_order(THD *thd, Ref_ptr_array ref_pointer_array, TABLE_LIST *tables,
 }
 
 
+// Relies on RAII to invoke a work function on calling scope's
+// exit.  Typically used when a scope has multiple return points
+// and some cleanup must be done in all cases.  Prevents
+// calling code from missing one such cleanup invocation.
+class OnScopeExit
+{
+  std::function<void()> _work;
+
+public:
+  OnScopeExit(std::function<void()> work)
+    : _work(work)
+  {}
+
+  ~OnScopeExit()
+  {
+    _work();
+  }
+};
+
 /**
   Intitialize the GROUP BY list.
 
@@ -25050,6 +25070,13 @@ setup_group(THD *thd, Ref_ptr_array ref_pointer_array, TABLE_LIST *tables,
   uint org_fields=all_fields.elements;
 
   thd->where="group statement";
+
+  // Don't allow markers to remain undefined upon return from setup_group
+  OnScopeExit ose([order] () {
+    for (ORDER *ord= order; ord; ord= ord->next)
+      if ((*ord->item)->marker == UNDEF_POS)
+        (*ord->item)->marker= 0;
+  });
   for (ord= order; ord; ord= ord->next)
   {
     if (find_order_in_list(thd, ref_pointer_array, tables, ord, fields,
