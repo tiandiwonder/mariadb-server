@@ -6567,6 +6567,9 @@ public:
   Item *transform(THD *thd, Item_transformer transformer, uchar *args);
   Field *create_tmp_field_ex(TABLE *table, Tmp_field_src *src,
                              const Tmp_field_param *param);
+
+private:
+  bool tie_field(THD *thd);
 };
 
 
