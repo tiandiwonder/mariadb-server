@@ -79,6 +79,12 @@ public:
   uint rm_error;
   enum xa_states xa_state;
   XID xid;
+  /*
+    TODO alternatively, could we use bit 32 of m_state?
+
+    Note: Access to this must be protected by mysql_bin_log's LOCK_log
+  */
+  bool xap_binlogged_awaiting_xac;
   bool is_set(int32_t flag)
   { return m_state.load(std::memory_order_relaxed) & flag; }
   void set(int32_t flag)
@@ -106,6 +112,7 @@ public:
       old&= ACQUIRED | RECOVERED;
       (void) LF_BACKOFF();
     }
+    xap_binlogged_awaiting_xac= FALSE;
   }
   void acquired_to_recovered()
   {
@@ -126,6 +133,16 @@ public:
     }
     return true;
   }
+  void notify_xap_binlogged()
+  {
+    DBUG_ASSERT(opt_bin_log);
+    xap_binlogged_awaiting_xac= TRUE;
+  }
+  void notify_xac_binlogged()
+  {
+    DBUG_ASSERT(opt_bin_log);
+    xap_binlogged_awaiting_xac= FALSE;
+  }
   static void lf_hash_initializer(LF_HASH *hash __attribute__((unused)),
                                   XID_cache_element *element,
                                   XID_cache_insert_element *new_element)
@@ -134,6 +151,7 @@ public:
     element->rm_error= 0;
     element->xa_state= new_element->xa_state;
     element->xid.set(new_element->xid);
+    element->xap_binlogged_awaiting_xac= FALSE;
     new_element->xid_cache_element= element;
   }
   static void lf_alloc_constructor(uchar *ptr)
@@ -325,6 +343,16 @@ void xid_cache_delete(THD *thd, XID_STATE *xid_state)
 }
 
 
+void xid_cache_update_xa_binlog_state(THD *thd, XID_STATE *xid_state, bool is_xap)
+{
+  DBUG_ASSERT(xid_state->is_explicit_XA());
+  if (is_xap)
+    xid_state->xid_cache_element->notify_xap_binlogged();
+  else
+    xid_state->xid_cache_element->notify_xac_binlogged();
+}
+
+
 struct xid_cache_iterate_arg
 {
   my_hash_walk_action action;
@@ -343,13 +371,47 @@ static my_bool xid_cache_iterate_callback(XID_cache_element *element,
   return res;
 }
 
-static int xid_cache_iterate(THD *thd, my_hash_walk_action action, void *arg)
+int xid_cache_iterate(THD *thd, my_hash_walk_action action, void *arg)
 {
   xid_cache_iterate_arg argument= { action, arg };
   return thd->fix_xid_hash_pins() ? -1 :
          lf_hash_iterate(&xid_cache, thd->xid_hash_pins,
                          (my_hash_walk_action) xid_cache_iterate_callback,
                          &argument);
+}
+
+static my_bool xid_cache_count_if_binlogged_xap(XID_cache_element *xs,
+                                                uint32 *count_arg)
+{
+  if (xs->xap_binlogged_awaiting_xac)
+    (*count_arg)++;
+  return FALSE;
+}
+
+int32 xid_cache_get_count_binlogged_xaps(THD *thd)
+{
+  uint32 xid_cache_binlogged_xap_arg= 0;
+  if (xid_cache_inited && mysqld_server_started)
+    xid_cache_iterate(thd,
+                      (my_hash_walk_action) xid_cache_count_if_binlogged_xap,
+                      &xid_cache_binlogged_xap_arg);
+  return xid_cache_binlogged_xap_arg;
+}
+
+static my_bool xid_cache_save_xap_binlogged_xids(XID_cache_element *xs,
+                                                 XID_collector *collector)
+{
+  if (!xs->xap_binlogged_awaiting_xac)
+    return FALSE;
+
+  collector->collect_xid(&xs->xid);
+  return FALSE;
+}
+
+void xid_cache_get_binlogged_xaps(THD *thd, XID_collector *collector)
+{
+  xid_cache_iterate(
+      thd, (my_hash_walk_action) xid_cache_save_xap_binlogged_xids, collector);
 }
 
 
