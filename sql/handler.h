@@ -5074,10 +5074,12 @@ public:
   bool check_table_binlog_row_based();
   bool prepare_for_row_logging();
   int prepare_for_insert(bool do_create);
+private:
+  inline
   int binlog_log_row(const uchar *before_record,
                      const uchar *after_record,
                      Log_func *log_func);
-
+public:
   inline void clear_cached_table_binlog_row_based_flag()
   {
     check_table_binlog_row_based_done= 0;
@@ -5744,5 +5746,11 @@ inline void Cost_estimate::reset(handler *file)
   reset();
   avg_io_cost= file->DISK_READ_COST * file->DISK_READ_RATIO;
 }
+
+int binlog_log_row_to_binlog(TABLE* table,
+                             const uchar *before_record,
+                             const uchar *after_record,
+                             Log_func *log_func,
+                             bool has_trans);
 
 #endif /* HANDLER_INCLUDED */

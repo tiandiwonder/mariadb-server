@@ -7259,11 +7259,11 @@ bool handler::check_table_binlog_row_based_internal()
                     mysql_bin_log.is_open()));
 }
 
-static int binlog_log_row_to_binlog(TABLE* table,
-                                    const uchar *before_record,
-                                    const uchar *after_record,
-                                    Log_func *log_func,
-                                    bool has_trans)
+int binlog_log_row_to_binlog(TABLE* table,
+                             const uchar *before_record,
+                             const uchar *after_record,
+                             Log_func *log_func,
+                             bool has_trans)
 {
   bool error= 0;
   THD *const thd= table->in_use;
@@ -7295,6 +7295,7 @@ static int binlog_log_row_to_binlog(TABLE* table,
   DBUG_RETURN(error ? HA_ERR_RBR_LOGGING_FAILED : 0);
 }
 
+inline
 int handler::binlog_log_row(const uchar *before_record,
                             const uchar *after_record,
                             Log_func *log_func)
@@ -7307,7 +7308,7 @@ int handler::binlog_log_row(const uchar *before_record,
                                     log_func, row_logging_has_trans);
 
 #ifdef HAVE_REPLICATION
-  if (unlikely(!error && table->s->online_alter_binlog && is_root_handler()))
+  if (likely(!error) && unlikely(table->s->online_alter_binlog) && is_root_handler())
     error= online_alter_log_row(table, before_record, after_record,
                                 log_func);
 #endif // HAVE_REPLICATION
