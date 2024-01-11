@@ -1035,7 +1035,7 @@ BEGIN;
 INSERT INTO child SET a=1;
 ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`child`, CONSTRAINT `child_ibfk_1` FOREIGN KEY (`a`) REFERENCES `parent` (`a`))
 connection default;
-SET innodb_lock_wait_timeout=0, foreign_key_checks=0;
+SET innodb_lock_wait_timeout=0, foreign_key_checks=0, lock_wait_timeout=0;
 TRUNCATE TABLE parent;
 ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 ALTER TABLE parent FORCE, ALGORITHM=COPY;
@@ -1047,7 +1047,7 @@ ERROR HY000: Lock wait timeout exceeded; try restarting transaction
 connection con1;
 COMMIT;
 connection default;
-SET innodb_lock_wait_timeout=DEFAULT;
+SET innodb_lock_wait_timeout=DEFAULT, lock_wait_timeout=DEFAULT;
 TRUNCATE TABLE parent;
 ALTER TABLE parent FORCE, ALGORITHM=COPY;
 ALTER TABLE parent FORCE, ALGORITHM=INPLACE;

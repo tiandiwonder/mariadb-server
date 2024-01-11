@@ -15684,6 +15684,15 @@ bool ha_innobase::can_switch_engines()
               m_prebuilt->table->referenced_set.empty());
 }
 
+bool ha_innobase::is_fk_defined_on_table_or_index(uint index)
+{
+  DBUG_ASSERT(index == MAX_KEY); // not implemented for other values
+  dict_sys.freeze(SRW_LOCK_CALL);
+  const bool empty= m_prebuilt->table->foreign_set.empty();
+  dict_sys.unfreeze();
+  return !empty;
+}
+
 /*******************************************************************//**
 Checks if a table is referenced by a foreign key. The MySQL manual states that
 a REPLACE is either equivalent to an INSERT, or DELETE(s) + INSERT. Only a

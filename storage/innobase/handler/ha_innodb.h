@@ -223,6 +223,8 @@ public:
 
 	bool can_switch_engines() override;
 
+	bool is_fk_defined_on_table_or_index(uint index) override;
+
 	uint referenced_by_foreign_key() override;
 
 	void free_foreign_key_create_info(char* str) override { my_free(str); }

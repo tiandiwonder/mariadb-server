@@ -1355,12 +1355,10 @@ bool wait_while_table_is_used(THD *thd, TABLE *table,
   DBUG_ENTER("wait_while_table_is_used");
   DBUG_ASSERT(!table->s->tmp_table);
   DBUG_PRINT("enter", ("table: '%s'  share: %p  db_stat: %u",
-                       table->s->table_name.str, table->s,
-                       table->db_stat));
+                       table->s->table_name.str, table->s, table->db_stat));
 
-  if (thd->mdl_context.upgrade_shared_lock(
-             table->mdl_ticket, MDL_EXCLUSIVE,
-             thd->variables.lock_wait_timeout))
+  if (thd->mdl_context.upgrade_shared_lock(table->mdl_ticket, MDL_EXCLUSIVE,
+                                           thd->variables.lock_wait_timeout))
     DBUG_RETURN(TRUE);
 
   table->s->tdc->flush(thd, true);
@@ -4704,12 +4702,28 @@ add_internal_tables(THD *thd, Query_tables_list *prelocking_ctx,
   DBUG_RETURN(FALSE);
 }
 
+static void
+add_fk_prelocked_table(THD *thd, Query_tables_list *prelocking_ctx,
+                       TABLE_LIST *tables, uint8 op,
+                       LEX_CSTRING *db, LEX_CSTRING *table,
+                       thr_lock_type lock_type)
+{
+  if (table_already_fk_prelocked(prelocking_ctx->query_tables, db, table,
+                                 lock_type))
+    return;
+
+  TABLE_LIST *tl= (TABLE_LIST *) thd->alloc(sizeof(TABLE_LIST));
+  tl->init_one_table_for_prelocking(db, table, NULL, lock_type,
+        TABLE_LIST::PRELOCK_FK, tables->belong_to_view, op,
+        &prelocking_ctx->query_tables_last, tables->for_insert_data);
+}
+
 /**
-  Extend the table_list to include foreign tables for prelocking.
+  Extend the table list to include foreign tables for prelocking.
 
   @param[in]  thd              Thread context.
   @param[in]  prelocking_ctx   Prelocking context of the statement.
-  @param[in]  table_list       Table list element for table.
+  @param[in]  tables           Table list element for table.
   @param[in]  sp               Routine body.
   @param[out] need_prelocking  Set to TRUE if method detects that prelocking
                                required, not changed otherwise.
@@ -4717,58 +4731,53 @@ add_internal_tables(THD *thd, Query_tables_list *prelocking_ctx,
   @retval FALSE  Success.
   @retval TRUE   Failure (OOM).
 */
-inline bool
+static bool
 prepare_fk_prelocking_list(THD *thd, Query_tables_list *prelocking_ctx,
-                           TABLE_LIST *table_list, bool *need_prelocking,
-                           uint8 op)
+                           TABLE_LIST *tables, bool *need_prelocking, uint8 op)
 {
   DBUG_ENTER("prepare_fk_prelocking_list");
-  List <FOREIGN_KEY_INFO> fk_list;
-  List_iterator<FOREIGN_KEY_INFO> fk_list_it(fk_list);
-  FOREIGN_KEY_INFO *fk;
+  List <FOREIGN_KEY_INFO> fk_plist, fk_clist;
   Query_arena *arena, backup;
-  TABLE *table= table_list->table;
+  TABLE *table= tables->table;
+  const bool is_insert= op & trg2bit(TRG_EVENT_INSERT);
+  const bool is_delete= op & trg2bit(TRG_EVENT_DELETE);
+  const bool is_update= op & trg2bit(TRG_EVENT_UPDATE);
 
-  if (!table->file->referenced_by_foreign_key())
-    DBUG_RETURN(FALSE);
-
-  arena= thd->activate_stmt_arena_if_needed(&backup);
-
-  table->file->get_parent_foreign_key_list(thd, &fk_list);
-  if (unlikely(thd->is_error()))
-  {
-    if (arena)
-      thd->restore_active_arena(arena, &backup);
-    return TRUE;
-  }
+  if (!table->file->referenced_by_foreign_key() &&
+      !table->file->is_fk_defined_on_table_or_index(MAX_KEY))
+    DBUG_RETURN(0);
 
   *need_prelocking= TRUE;
 
-  while ((fk= fk_list_it++))
+  arena= thd->activate_stmt_arena_if_needed(&backup);
+
+  if (is_delete || is_update)
   {
-    // FK_OPTION_RESTRICT and FK_OPTION_NO_ACTION only need read access
-    thr_lock_type lock_type;
+    table->file->get_parent_foreign_key_list(thd, &fk_plist);
+    for (auto &fk : fk_plist)
+    {
+      thr_lock_type lock_type;
 
-    if ((op & trg2bit(TRG_EVENT_DELETE) && fk_modifies_child(fk->delete_method))
-     || (op & trg2bit(TRG_EVENT_UPDATE) && fk_modifies_child(fk->update_method)))
-      lock_type= TL_FIRST_WRITE;
-    else
-      lock_type= TL_READ;
+      // FK_OPTION_RESTRICT and FK_OPTION_NO_ACTION only need read access
+      if ((is_delete && fk_modifies_child(fk.delete_method))
+       || (is_update && fk_modifies_child(fk.update_method)))
+        lock_type= TL_FIRST_WRITE;
+      else
+        lock_type= TL_READ;
 
-    if (table_already_fk_prelocked(prelocking_ctx->query_tables,
-          fk->foreign_db, fk->foreign_table,
-          lock_type))
-      continue;
-
-    TABLE_LIST *tl= (TABLE_LIST *) thd->alloc(sizeof(TABLE_LIST));
-    tl->init_one_table_for_prelocking(fk->foreign_db,
-        fk->foreign_table,
-        NULL, lock_type,
-        TABLE_LIST::PRELOCK_FK,
-        table_list->belong_to_view, op,
-        &prelocking_ctx->query_tables_last,
-        table_list->for_insert_data);
+      add_fk_prelocked_table(thd, prelocking_ctx, tables, op, fk.foreign_db,
+                             fk.foreign_table, lock_type);
+    }
   }
+
+  if (is_insert || is_update)
+  {
+    table->file->get_foreign_key_list(thd, &fk_clist);
+    for (auto &fk : fk_clist)
+      add_fk_prelocked_table(thd, prelocking_ctx, tables, op, fk.referenced_db,
+                             fk.referenced_table, TL_READ);
+  }
+
   if (arena)
     thd->restore_active_arena(arena, &backup);
   DBUG_RETURN(FALSE);
