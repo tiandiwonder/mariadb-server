@@ -5924,6 +5924,13 @@ lock_clust_rec_read_check_and_lock(
 		return DB_SUCCESS;
 	}
 
+	if (heap_no > PAGE_HEAP_NO_SUPREMUM && trx->read_view.is_open()
+	    && gap_mode != LOCK_GAP
+	    && !trx->read_view.changes_visible(
+		trx_read_trx_id(rec + row_trx_id_offset(rec, index)))) {
+		return DB_DEADLOCK;
+	}
+
 	dberr_t err = lock_rec_lock(false, gap_mode | mode,
 				    block, heap_no, index, thr);
 
