@@ -2402,6 +2402,11 @@ dispatch_end:
   {
     WSREP_DEBUG("THD is killed at dispatch_end");
   }
+  if (thd->reset_sp_cache)
+  {
+    thd->sp_caches_clear();
+    thd->reset_sp_cache= FALSE;
+  }
   wsrep_after_command_before_result(thd);
   if (wsrep_current_error(thd) && !wsrep_command_no_result(command))
   {

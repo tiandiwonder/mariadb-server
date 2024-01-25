@@ -321,7 +321,7 @@ select * from t1;
 prepare stmt from "select f1()";
 execute stmt;
 call p_verify_reprepare_count(0);
---error ER_BAD_TABLE_ERROR
+--error ER_SP_DOES_NOT_EXIST
 execute stmt;
 call p_verify_reprepare_count(0);
 

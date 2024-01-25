@@ -422,7 +422,7 @@ call p_verify_reprepare_count(0);
 SUCCESS
 
 execute stmt;
-ERROR 42S02: Unknown table 'test.t1'
+ERROR 42000: FUNCTION test.f1 does not exist
 call p_verify_reprepare_count(0);
 SUCCESS
 
