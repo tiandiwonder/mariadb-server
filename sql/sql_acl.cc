@@ -12831,7 +12831,32 @@ static bool send_server_handshake_packet(MPVIO_EXT *mpvio,
 
   int2store(end, thd->client_capabilities);
   /* write server characteristics: up to 16 bytes allowed */
-  end[2]= (char) default_charset_info->number;
+
+  /*
+    Send the default server collation ID.
+    Note, since MySQL-4.1 it's actually the
+    client responsibility to send its character set to the server,
+    so this value means nothing and is ignored by most connectors.
+    But some rare connectors (e.g. PHP) still read it.
+  */
+  CHARSET_INFO *handshake_cs= default_charset_info;
+  if (handshake_cs->number > 0xFF)
+  {
+    /*
+      A workaround for a 2-byte collation ID: translate it into
+      the ID of the primary collation of this character set.
+    */
+    CHARSET_INFO *cs= get_charset_by_csname(handshake_cs->csname,
+                                            MY_CS_PRIMARY, MYF(MY_WME));
+    /*
+      cs should not normally be NULL, however it may be possible
+      with a dynamic character set incorrectly defined in Index.xml.
+      For safety let's fallback to latin1 in case cs is NULL.
+    */
+    handshake_cs= cs ? cs : &my_charset_latin1;
+  }
+  end[2]= (char) handshake_cs->number;
+
   int2store(end+3, mpvio->auth_info.thd->server_status);
   int2store(end+5, thd->client_capabilities >> 16);
   end[7]= data_len;
