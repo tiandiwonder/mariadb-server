@@ -90,9 +90,8 @@ ALTER TABLE t10_1b IMPORT TABLESPACE;
 --let $restart_parameters=--innodb-read-only --read-only
 --source include/restart_mysqld.inc
 
-# FIXME: If we executed CHECK TABLE here, it would upgrade the mysql_version
-# in the .frm files despite --read-only!
-# CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b;
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b;
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b FOR UPGRADE;
 
 SELECT COUNT(*) FROM t1;
 SELECT COUNT(*) FROM t1b;
@@ -105,6 +104,8 @@ SELECT COUNT(*) FROM t10_1b;
 --let $restart_parameters=
 --source include/restart_mysqld.inc
 
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b FOR UPGRADE;
+
 INSERT INTO t1 VALUES(NULL);
 INSERT INTO t1b VALUES(NULL);
 INSERT INTO t1t VALUES(NULL);
@@ -112,6 +113,8 @@ INSERT INTO t5_7 VALUES(NULL);
 INSERT INTO t5_7b VALUES(NULL);
 INSERT INTO t10_1 VALUES(NULL);
 INSERT INTO t10_1b VALUES(NULL);
+
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b FOR UPGRADE;
 
 --let SEARCH_FILE= $MYSQLTEST_VARDIR/log/mysqld.1.err
 --let SEARCH_PATTERN= InnoDB: Resetting PAGE_ROOT_AUTO_INC from 128 to 123 on table `test`\.`t1t`
