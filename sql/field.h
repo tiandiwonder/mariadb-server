@@ -1744,6 +1744,11 @@ public:
   }
   virtual bool sp_prepare_and_store_item(THD *thd, Item **value);
 
+  virtual bool allowed_in_expr_cache() const
+  {
+    return true;
+  }
+
   friend int cre_myisam(char * name, TABLE *form, uint options,
 			ulonglong auto_increment_value);
   friend class Copy_field;
@@ -4137,6 +4142,14 @@ public:
   uint32 character_octet_length() const;
   bool is_equal(const Column_definition &new_field) const;
   void print_key_value(String *out, uint32 length);
+  bool allowed_in_expr_cache() const override
+  {
+    /* The SQL expression cache requires that all fields written to it may be
+       cached in heap memory and not to a temp table ARIA file.  BLOBs (and
+       TEXT) fields are of potentially unknown size and thus are assumed to be
+       backed by an ARIA temp table file, not the heap. */
+    return false;
+  }
 
   friend void TABLE::remember_blob_values(String *blob_storage);
   friend void TABLE::restore_blob_values(String *blob_storage);
