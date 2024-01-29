@@ -87,7 +87,19 @@ ALTER TABLE t10_1 IMPORT TABLESPACE;
 ALTER TABLE t10_1b IMPORT TABLESPACE;
 
 # Restart, so that the InnoDB tables will be loaded into the data dictionary.
+--let $restart_parameters=--read-only
+--source include/restart_mysqld.inc
+
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b;
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b FOR UPGRADE;
+
 --let $restart_parameters=--innodb-read-only --read-only
+--source include/restart_mysqld.inc
+
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b;
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b FOR UPGRADE;
+
+--let $restart_parameters=--innodb-read-only
 --source include/restart_mysqld.inc
 
 CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b;

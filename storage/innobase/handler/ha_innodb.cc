@@ -14832,25 +14832,26 @@ ha_innobase::check(
 	ut_a(m_prebuilt->trx->magic_n == TRX_MAGIC_N);
 	ut_a(m_prebuilt->trx == thd_to_trx(thd));
 
-        if (handler_flags || check_for_upgrade(check_opt))
-        {
-          /* The file was already checked and fixed as part of open */
-          print_check_msg(thd, table->s->db.str, table->s->table_name.str,
-                          "check", "note",
-                          (opt_readonly || !(check_opt->sql_flags & TT_FOR_UPGRADE)) ?
-                          "Auto_increment will be checked for each open. Can be fixed "
-                          " with CHECK TABLE FOR UPGRADE" :
-                          "Auto_increment checked and table version updated",
-                          1);
-          if (handler_flags && (check_opt->sql_flags & TT_FOR_UPGRADE))
-          {
-              /*
-                No other issues found (as handler_flags was only set if there
-                as not other problems with the table than auto_increment).
-              */
-              DBUG_RETURN(HA_ADMIN_OK);
-          }
-        }
+	if (handler_flags || check_for_upgrade(check_opt)) {
+		/* The file was already checked and fixed as part of open */
+		print_check_msg(thd, table->s->db.str, table->s->table_name.str,
+				"check", "note",
+				(opt_readonly || high_level_read_only
+				 || !(check_opt->sql_flags & TT_FOR_UPGRADE))
+				? "Auto_increment will be"
+				" checked on each open until"
+				" CHECK TABLE FOR UPGRADE is executed"
+				: "Auto_increment checked and"
+				" .frm file version updated", 1);
+		if (handler_flags && (check_opt->sql_flags & TT_FOR_UPGRADE)) {
+			/*
+			  No other issues found (as handler_flags was only
+			  set if there as not other problems with the table
+			  than auto_increment).
+			*/
+			DBUG_RETURN(HA_ADMIN_OK);
+		}
+	}
 
 	if (m_prebuilt->mysql_template == NULL) {
 		/* Build the template; we will use a dummy template
@@ -15077,40 +15078,34 @@ ha_innobase::check(
 	DBUG_RETURN(is_ok ? HA_ADMIN_OK : HA_ADMIN_CORRUPT);
 }
 
-/*******************************************************************//**
+/**
 Check if we there is a problem with the InnoDB table.
-@return HA_ADMIN_OK            - Table is ok
-@return HA_ADMIN_NEEDS_ALTER   - User should run ALTER TABLE FOR UPGRADE
-@return HA_ADMIN_NEEDS_CHECK   - User should run CHECK TABLE FOR UPGRADE */
-
-int
-ha_innobase::check_for_upgrade(
-/*===============*/
-	HA_CHECK_OPT*	check_opt)	/*!< in: check options */
+@param check_opt     check options
+@retval HA_ADMIN_OK           if Table is ok
+@retval HA_ADMIN_NEEDS_ALTER  User should run ALTER TABLE FOR UPGRADE
+@retval HA_ADMIN_NEEDS_CHECK  User should run CHECK TABLE FOR UPGRADE
+@retval HA_ADMIN_FAILED       if InnoDB is in read-only mode */
+int ha_innobase::check_for_upgrade(HA_CHECK_OPT *check_opt)
 {
   /*
     Check if there is a possibility that the auto increment value
     stored in PAGE_ROOT_AUTO_INC could be corrupt.
   */
-  if ((!table->s->mysql_version || (table->s->mysql_version < 100210)) &&
-      table->found_next_number_field)
+  if (table->s->mysql_version >= 100210);
+  else if (const Field *auto_increment= table->found_next_number_field)
   {
-    uint col_no= innodb_col_no(table->found_next_number_field);
-    dict_index_t *index= dict_table_get_first_index(m_prebuilt->table);
-    const dict_col_t *autoinc_col= dict_table_get_nth_col(m_prebuilt->table, col_no);
-
-    while (index)
+    uint col_no= innodb_col_no(auto_increment);
+    const dict_col_t *autoinc_col=
+      dict_table_get_nth_col(m_prebuilt->table, col_no);
+    if (m_prebuilt->table->get_index(*autoinc_col))
     {
-      if (index->fields[0].col == autoinc_col)
-      {
-        check_opt->handler_flags= 1;
-        return HA_ADMIN_NEEDS_CHECK;
-      }
+      check_opt->handler_flags= 1;
+      return (high_level_read_only && !opt_readonly)
+        ? HA_ADMIN_FAILED : HA_ADMIN_NEEDS_CHECK;
     }
   }
   return HA_ADMIN_OK;
 }
-
 
 /*******************************************************************//**
 Gets the foreign key create info for a table stored in InnoDB.

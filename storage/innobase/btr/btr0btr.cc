@@ -1268,6 +1268,16 @@ btr_read_autoinc(dict_index_t* index)
 	return autoinc;
 }
 
+dict_index_t *dict_table_t::get_index(const dict_col_t &col) const
+{
+  dict_index_t *index= dict_table_get_first_index(this);
+
+  while (index && (index->fields[0].col != &col || index->is_corrupted()))
+    index= dict_table_get_next_index(index);
+
+  return index;
+}
+
 /** Read the last used AUTO_INCREMENT value from PAGE_ROOT_AUTO_INC,
 or fall back to MAX(auto_increment_column).
 @param table          table containing an AUTO_INCREMENT column
@@ -1283,33 +1293,30 @@ uint64_t btr_read_autoinc_with_fallback(const dict_table_t *table,
   ut_ad(table->persistent_autoinc);
   ut_ad(!table->is_temporary());
 
-  uint64_t autoinc= 0, max_autoinc= 0;
-  dict_index_t *index= dict_table_get_first_index(table);
+  uint64_t autoinc= 0;
   mtr_t mtr;
   mtr.start();
 
   if (buf_block_t *block=
-      buf_page_get(page_id_t(table->space_id, index->page),
+      buf_page_get(page_id_t(table->space_id,
+                             dict_table_get_first_index(table)->page),
                    table->space->zip_size(), RW_SX_LATCH, &mtr))
   {
     autoinc= page_get_autoinc(block->frame);
 
-    if (autoinc > max || mysql_version == 0 || mysql_version < 100210)
+    if (autoinc <= max && mysql_version >= 100210);
+    else if (dict_index_t *index=
+             table->get_index(*dict_table_get_nth_col(table, col_no)))
     {
       /* Read MAX(autoinc_col), in case this table had originally been
       created before MariaDB 10.2.4 introduced persistent AUTO_INCREMENT
       and MariaDB 10.2.10 fixed MDEV-12123, and there could be a garbage
       value in the PAGE_ROOT_AUTO_INC field. */
-      const dict_col_t *autoinc_col= dict_table_get_nth_col(table, col_no);
-      while (index && index->fields[0].col != autoinc_col)
-        index= dict_table_get_next_index(index);
-
-      if (index)
-        max_autoinc= row_search_max_autoinc(index);
+      const uint64_t max_autoinc= row_search_max_autoinc(index);
 
       const bool need_adjust{autoinc > max || autoinc < max_autoinc};
 
-      if (UNIV_UNLIKELY(need_adjust) && !high_level_read_only)
+      if (UNIV_UNLIKELY(need_adjust) && !high_level_read_only && !opt_readonly)
       {
         sql_print_information("InnoDB: Resetting PAGE_ROOT_AUTO_INC from "
                               UINT64PF " to " UINT64PF

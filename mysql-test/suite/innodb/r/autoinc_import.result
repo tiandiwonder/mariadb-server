@@ -39,33 +39,79 @@ Warning	1810	IO Read error: (2, No such file or directory) Error opening './test
 ALTER TABLE t10_1b IMPORT TABLESPACE;
 Warnings:
 Warning	1810	IO Read error: (2, No such file or directory) Error opening './test/t10_1b.cfg', will attempt to import without schema verification
-# restart: --innodb-read-only --read-only
+# restart: --read-only
 CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
 test.t1b	check	status	OK
 test.t1t	check	status	OK
-test.t5_7	check	note	Auto_increment will be checked for each open. Can be fixed  with CHECK TABLE FOR UPGRADE
+test.t5_7	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
 test.t5_7	check	status	OK
-test.t5_7b	check	note	Auto_increment will be checked for each open. Can be fixed  with CHECK TABLE FOR UPGRADE
+test.t5_7b	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
 test.t5_7b	check	status	OK
-test.t10_1	check	note	Auto_increment will be checked for each open. Can be fixed  with CHECK TABLE FOR UPGRADE
+test.t10_1	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
 test.t10_1	check	status	OK
-test.t10_1b	check	note	Auto_increment will be checked for each open. Can be fixed  with CHECK TABLE FOR UPGRADE
+test.t10_1b	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
 test.t10_1b	check	status	OK
 CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b FOR UPGRADE;
 Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
 test.t1b	check	status	OK
 test.t1t	check	status	OK
-test.t5_7	check	note	Auto_increment will be checked for each open. Can be fixed  with CHECK TABLE FOR UPGRADE
+test.t5_7	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
 test.t5_7	check	status	OK
-test.t5_7b	check	note	Auto_increment will be checked for each open. Can be fixed  with CHECK TABLE FOR UPGRADE
+test.t5_7b	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
 test.t5_7b	check	status	OK
-test.t10_1	check	note	Auto_increment will be checked for each open. Can be fixed  with CHECK TABLE FOR UPGRADE
+test.t10_1	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
 test.t10_1	check	status	OK
-test.t10_1b	check	note	Auto_increment will be checked for each open. Can be fixed  with CHECK TABLE FOR UPGRADE
+test.t10_1b	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
 test.t10_1b	check	status	OK
+# restart: --innodb-read-only --read-only
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+test.t1b	check	status	OK
+test.t1t	check	status	OK
+test.t5_7	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
+test.t5_7	check	status	OK
+test.t5_7b	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
+test.t5_7b	check	status	OK
+test.t10_1	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
+test.t10_1	check	status	OK
+test.t10_1b	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
+test.t10_1b	check	status	OK
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b FOR UPGRADE;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+test.t1b	check	status	OK
+test.t1t	check	status	OK
+test.t5_7	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
+test.t5_7	check	status	OK
+test.t5_7b	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
+test.t5_7b	check	status	OK
+test.t10_1	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
+test.t10_1	check	status	OK
+test.t10_1b	check	note	Auto_increment will be checked on each open until CHECK TABLE FOR UPGRADE is executed
+test.t10_1b	check	status	OK
+# restart: --innodb-read-only
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+test.t1b	check	status	OK
+test.t1t	check	status	OK
+test.t5_7	check	status	Operation failed
+test.t5_7b	check	status	Operation failed
+test.t10_1	check	status	Operation failed
+test.t10_1b	check	status	Operation failed
+CHECK TABLE t1, t1b, t1t, t5_7, t5_7b, t10_1, t10_1b FOR UPGRADE;
+Table	Op	Msg_type	Msg_text
+test.t1	check	status	OK
+test.t1b	check	status	OK
+test.t1t	check	status	OK
+test.t5_7	check	status	Operation failed
+test.t5_7b	check	status	Operation failed
+test.t10_1	check	status	Operation failed
+test.t10_1b	check	status	Operation failed
 SELECT COUNT(*) FROM t1;
 COUNT(*)
 1
@@ -93,13 +139,13 @@ Table	Op	Msg_type	Msg_text
 test.t1	check	status	OK
 test.t1b	check	status	OK
 test.t1t	check	status	OK
-test.t5_7	check	note	Auto_increment checked and table version updated
+test.t5_7	check	note	Auto_increment checked and .frm file version updated
 test.t5_7	check	status	OK
-test.t5_7b	check	note	Auto_increment checked and table version updated
+test.t5_7b	check	note	Auto_increment checked and .frm file version updated
 test.t5_7b	check	status	OK
-test.t10_1	check	note	Auto_increment checked and table version updated
+test.t10_1	check	note	Auto_increment checked and .frm file version updated
 test.t10_1	check	status	OK
-test.t10_1b	check	note	Auto_increment checked and table version updated
+test.t10_1b	check	note	Auto_increment checked and .frm file version updated
 test.t10_1b	check	status	OK
 INSERT INTO t1 VALUES(NULL);
 INSERT INTO t1b VALUES(NULL);
