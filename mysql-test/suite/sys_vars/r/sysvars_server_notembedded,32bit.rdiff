@@ -1,5 +1,5 @@
---- suite/sys_vars/r/sysvars_server_notembedded.result	2023-12-30 13:54:50.261467283 +0200
-+++ suite/sys_vars/r/sysvars_server_notembedded,32bit.reject	2024-01-04 13:19:34.101324601 +0200
+--- suite/sys_vars/r/sysvars_server_notembedded.result
++++ suite/sys_vars/r/sysvars_server_notembedded,32bit.reject
 @@ -44,7 +44,7 @@
  COMMAND_LINE_ARGUMENT	REQUIRED
  VARIABLE_NAME	ARIA_BLOCK_SIZE

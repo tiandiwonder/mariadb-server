@@ -1,5 +1,5 @@
---- innodb-spatial-index.result
-+++ innodb-spatial-index.result
+--- suite/encryption/r/innodb-spatial-index.result
++++ suite/encryption/r/innodb-spatial-index,strict_full_crc32.reject
 @@ -1,23 +1,27 @@
  CREATE TABLE t1 (pk INT PRIMARY KEY AUTO_INCREMENT,
  c VARCHAR(256), coordinate POINT NOT NULL, SPATIAL index(coordinate)) ENGINE=INNODB
@@ -19,7 +19,7 @@
  PAGE_COMPRESSED=YES, ENCRYPTED=YES ENGINE=INNODB;
  ALTER TABLE t1 ADD SPATIAL INDEX b1(coordinate), ALGORITHM=COPY;
 -Got one of the listed errors
- ALTER TABLE t1 ADD SPATIAL INDEX b2(coordinate), FORCE, ALGORITHM=INPLACE;
+ ALTER TABLE t1 ADD SPATIAL INDEX b2(coordinate), ALGORITHM=INPLACE;
 -Got one of the listed errors
 +Warnings:
 +Note	1831	Duplicate index `b2`. This is deprecated and will be disallowed in a future release

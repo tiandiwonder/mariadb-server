@@ -20,7 +20,7 @@ INSERT INTO t0 SET pk=2;
 
 --connection default
 SET DEBUG_SYNC='alter_table_inplace_after_lock_downgrade SIGNAL prepared WAIT_FOR logged';
-send ALTER TABLE t1 FORCE;
+send ALTER TABLE t1 FORCE, algorithm=inplace;
 
 --connection con1
 SET DEBUG_SYNC='now WAIT_FOR prepared';

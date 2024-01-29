@@ -603,7 +603,7 @@ insert into t1 values(1, repeat('a',20000));
 --echo # Skip sort
 --echo # Reusing the same pk
 --enable_info
-alter table t1 force;
+alter table t1;
 --disable_info
 eval $innodb_metrics_select;
 SET GLOBAL innodb_monitor_reset = module_ddl;
@@ -729,7 +729,7 @@ SET GLOBAL innodb_monitor_reset = module_ddl;
 --echo # Skip sort
 --echo # Reusing the same pk
 --enable_info
-alter table t1 force;
+alter table t1;
 --disable_info
 eval $innodb_metrics_select;
 SET GLOBAL innodb_monitor_reset = module_ddl;
@@ -1207,7 +1207,7 @@ DROP TABLE t1;
 --echo #
 CREATE TABLE t1(a INT, b INT AS (a), KEY(a, b DESC)) ENGINE=InnoDB;
 ALTER TABLE t1 RENAME COLUMN IF EXISTS b TO v;
-ALTER TABLE t1 FORCE;
+ALTER TABLE t1;
 DROP TABLE t1;
 
 --echo #

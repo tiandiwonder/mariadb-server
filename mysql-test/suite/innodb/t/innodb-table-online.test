@@ -387,7 +387,7 @@ INSERT INTO t1 VALUES(0,NULL);
 
 connection con1;
 SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL created WAIT_FOR ins';
-send ALTER TABLE t1 FORCE;
+send ALTER TABLE t1 force, algorithm=inplace;
 
 connection default;
 SET DEBUG_SYNC = 'now WAIT_FOR created';
@@ -413,7 +413,7 @@ INSERT INTO t1 SET pk=1;
 
 connection con1;
 SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL created WAIT_FOR updated';
-send ALTER TABLE t1 FORCE;
+send ALTER TABLE t1 FORCE, algorithm=inplace;
 
 connection default;
 SET DEBUG_SYNC = 'now WAIT_FOR created';
@@ -432,7 +432,7 @@ CREATE TABLE t1(f1 longtext, f2 int, KEY(f1(1024)), KEY(f2, f1(20))) ENGINE=Inno
 INSERT INTO t1 VALUES('a', 1);
 connection con1;
 set DEBUG_SYNC="innodb_inplace_alter_table_enter SIGNAL con_default WAIT_FOR con1_signal";
-send ALTER TABLE t1 FORCE;
+send ALTER TABLE t1 FORCE, algorithm=inplace;
 connection default;
 SET DEBUG_SYNC="now WAIT_FOR con_default";
 UPDATE t1 SET f1 = NULL;
@@ -453,7 +453,7 @@ INSERT INTO t1 VALUES(6000, 6000, "InnoDB",
                       "MariaDB", repeat('a', 87));
 
 SET DEBUG_SYNC="inplace_after_index_build SIGNAL dml_start WAIT_FOR dml_commit";
-SEND ALTER TABLE t1 FORCE;
+SEND ALTER TABLE t1 FORCE, algorithm=inplace;
 
 connection con1;
 SET DEBUG_SYNC="now WAIT_FOR dml_start";

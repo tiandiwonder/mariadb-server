@@ -400,6 +400,8 @@ col383 text
 set innodb_strict_mode = 1;
 --error ER_TOO_BIG_ROWSIZE
 alter table t1 engine=InnoDB;
+alter table t1 algorithm=copy;
+alter table t1 force;
 
 drop table t1;
 

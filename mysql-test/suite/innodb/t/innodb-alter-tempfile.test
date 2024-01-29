@@ -83,7 +83,7 @@ DELETE FROM mysql.innodb_table_stats;
 
 connect (con2,localhost,root,,);
 SET DEBUG_SYNC='innodb_inplace_alter_table_enter SIGNAL blocked WAIT_FOR ever';
-send ALTER TABLE t1 FORCE;
+send ALTER TABLE t1 force, algorithm=inplace;
 
 connection default;
 SET DEBUG_SYNC='now WAIT_FOR blocked';

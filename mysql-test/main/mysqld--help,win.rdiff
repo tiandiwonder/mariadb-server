@@ -1,5 +1,5 @@
---- main/mysqld--help.result	2023-11-30 02:21:51.951132200 +0100
-+++ main/mysqld--help,win.reject	2023-11-30 02:35:44.404612300 +0100
+--- main/mysqld--help.result
++++ main/mysqld--help,win.reject
 @@ -191,6 +191,7 @@
   --console           Write error output on screen; don't remove the console
   window on windows.

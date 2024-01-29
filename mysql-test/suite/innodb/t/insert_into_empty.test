@@ -433,8 +433,8 @@ CREATE TABLE t1 (pk int primary key, c01 text, c02 text, c03 text,
                  c04 text, c05 text, c06 text, c07 text, c08 text,
                  c09 text, c10 text, c11 text, c12 text) ENGINE=InnoDB;
 SET GLOBAL INNODB_DEFAULT_ROW_FORMAT= COMPACT;
+ALTER TABLE t1;
 --replace_result 1982 8126 4030 8126
-ALTER TABLE t1 FORCE;
 let $page_size= `SELECT @@innodb_page_size`;
 let $error_code = 0;
 

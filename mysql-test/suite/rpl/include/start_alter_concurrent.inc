@@ -71,7 +71,7 @@ while($i < 21)
 while($i < 11)
 {
   --connection con$i
-  --send_eval alter $alter_online table t$i add column c int, force, algorithm=$alter_algorithm
+  --send_eval alter $alter_online table t$i add column c int, algorithm=$alter_algorithm
   --inc $i
 }
 
@@ -165,7 +165,7 @@ while($i < 11)
 {
   --connection con$i
   --eval insert into t$i values(3,2,1,1)
-  --send_eval alter table t$i change b b int unique, force, algorithm=$alter_algorithm
+  --send_eval alter table t$i change b b int unique, algorithm=$alter_algorithm
   --inc $i
 }
 --connection master_node

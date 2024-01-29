@@ -23,7 +23,7 @@ ALTER TABLE t1 ADD FULLTEXT INDEX(b);
 connection default;
 connect ddl2, localhost, root,,;
 CREATE TABLE t2(a TEXT,b TEXT,FULLTEXT INDEX(a)) ENGINE=InnoDB;
-ALTER TABLE t2 DROP INDEX a, ADD FULLTEXT INDEX(b), FORCE;
+ALTER TABLE t2 DROP INDEX a, ADD FULLTEXT INDEX(b), algorithm=inplace;
 connection default;
 connect ddl3, localhost, root,,;
 CREATE TABLE t3(a TEXT,b TEXT,FULLTEXT INDEX(a)) ENGINE=InnoDB;

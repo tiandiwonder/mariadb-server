@@ -232,7 +232,7 @@ t1	ind3	n_diff_pfx01
 t1	ind3	n_diff_pfx02
 t1	ind3	n_leaf_pages
 t1	ind3	size
-ALTER TABLE t1 DROP b, FORCE;
+ALTER TABLE t1 DROP b;
 SELECT table_name, index_name, stat_name FROM mysql.innodb_index_stats;
 table_name	index_name	stat_name
 t1	GEN_CLUST_INDEX	n_diff_pfx01

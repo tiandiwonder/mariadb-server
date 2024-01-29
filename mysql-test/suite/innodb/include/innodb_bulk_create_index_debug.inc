@@ -82,7 +82,7 @@ INSERT INTO t1 VALUES
 SELECT CHAR_LENGTH(b) FROM t1;
 
 --enable_info
-ALTER TABLE t1 DROP COLUMN c, FORCE;
+ALTER TABLE t1 DROP COLUMN c;
 --disable_info
 
 --source include/restart_mysqld.inc
@@ -185,7 +185,7 @@ SELECT CHAR_LENGTH(b) FROM t1;
 connect (hang,localhost,root);
 SET DEBUG_SYNC='alter_table_inplace_trans_commit SIGNAL hung WAIT_FOR ever';
 send
-ALTER TABLE t1 DROP COLUMN c, FORCE;
+ALTER TABLE t1 DROP COLUMN c;
 
 connection default;
 SET DEBUG_SYNC='now WAIT_FOR hung';

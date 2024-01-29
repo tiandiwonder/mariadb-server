@@ -36,7 +36,7 @@ CHAR_LENGTH(b)
 20000
 40000
 60000
-ALTER TABLE t1 DROP COLUMN c, FORCE;
+ALTER TABLE t1 DROP COLUMN c;
 affected rows: 0
 info: Records: 0  Duplicates: 0  Warnings: 0
 CHECK TABLE t0,t1;
@@ -116,7 +116,7 @@ CHAR_LENGTH(b)
 60000
 connect  hang,localhost,root;
 SET DEBUG_SYNC='alter_table_inplace_trans_commit SIGNAL hung WAIT_FOR ever';
-ALTER TABLE t1 DROP COLUMN c, FORCE;
+ALTER TABLE t1 DROP COLUMN c;
 connection default;
 SET DEBUG_SYNC='now WAIT_FOR hung';
 disconnect hang;
@@ -169,7 +169,7 @@ CHAR_LENGTH(b)
 20000
 40000
 60000
-ALTER TABLE t1 DROP COLUMN c, FORCE;
+ALTER TABLE t1 DROP COLUMN c;
 affected rows: 0
 info: Records: 0  Duplicates: 0  Warnings: 0
 CHECK TABLE t0,t1;
@@ -249,7 +249,7 @@ CHAR_LENGTH(b)
 60000
 connect  hang,localhost,root;
 SET DEBUG_SYNC='alter_table_inplace_trans_commit SIGNAL hung WAIT_FOR ever';
-ALTER TABLE t1 DROP COLUMN c, FORCE;
+ALTER TABLE t1 DROP COLUMN c;
 connection default;
 SET DEBUG_SYNC='now WAIT_FOR hung';
 disconnect hang;
@@ -302,7 +302,7 @@ CHAR_LENGTH(b)
 20000
 40000
 60000
-ALTER TABLE t1 DROP COLUMN c, FORCE;
+ALTER TABLE t1 DROP COLUMN c;
 affected rows: 0
 info: Records: 0  Duplicates: 0  Warnings: 0
 CHECK TABLE t0,t1;
@@ -382,7 +382,7 @@ CHAR_LENGTH(b)
 60000
 connect  hang,localhost,root;
 SET DEBUG_SYNC='alter_table_inplace_trans_commit SIGNAL hung WAIT_FOR ever';
-ALTER TABLE t1 DROP COLUMN c, FORCE;
+ALTER TABLE t1 DROP COLUMN c;
 connection default;
 SET DEBUG_SYNC='now WAIT_FOR hung';
 disconnect hang;
@@ -435,7 +435,7 @@ CHAR_LENGTH(b)
 20000
 40000
 60000
-ALTER TABLE t1 DROP COLUMN c, FORCE;
+ALTER TABLE t1 DROP COLUMN c;
 affected rows: 0
 info: Records: 0  Duplicates: 0  Warnings: 0
 CHECK TABLE t0,t1;
@@ -515,7 +515,7 @@ CHAR_LENGTH(b)
 60000
 connect  hang,localhost,root;
 SET DEBUG_SYNC='alter_table_inplace_trans_commit SIGNAL hung WAIT_FOR ever';
-ALTER TABLE t1 DROP COLUMN c, FORCE;
+ALTER TABLE t1 DROP COLUMN c;
 connection default;
 SET DEBUG_SYNC='now WAIT_FOR hung';
 disconnect hang;

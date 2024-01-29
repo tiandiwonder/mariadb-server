@@ -5,7 +5,7 @@
 # $alter_algorithm   {DEFAULT|INPLACE|COPY|NOCOPY|INSTANT}
 # $show_binlog
 #
---let $force_needed= force ,
+--let $force_needed=
 # Error that is caused by a particular ALTER's option combination
 --let $alter_error = 0
 
@@ -100,7 +100,7 @@ if (`select '$alter_algorithm' = 'instant' or  '$alter_algorithm' = 'nocopy'`)
 --eval alter table t1 add column f int after b, $force_needed add column g int first ,add column  h varchar(100), algorithm=$alter_algorithm
 if (`select '$alter_algorithm' = 'instant' or  '$alter_algorithm' = 'nocopy'`)
 {
- --let $alter_error=ER_KEY_COLUMN_DOES_NOT_EXIST
+ --let $alter_error=ER_KEY_COLUMN_DOES_NOT_EXIST,ER_ALTER_OPERATION_NOT_SUPPORTED,ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
 }
 --error 0,$alter_error
 --eval alter table t1 add index if not exists index_1(f), $force_needed algorithm=$alter_algorithm
@@ -112,7 +112,7 @@ if (`select '$alter_algorithm' = 'instant' or  '$alter_algorithm' = 'nocopy'`)
 --eval alter table t1 drop index index_1, $force_needed algorithm=$alter_algorithm
 if (`select '$alter_algorithm' = 'instant' or  '$alter_algorithm' = 'nocopy'`)
 {
- --let $alter_error=ER_KEY_COLUMN_DOES_NOT_EXIST
+ --let $alter_error=ER_KEY_COLUMN_DOES_NOT_EXIST,ER_ALTER_OPERATION_NOT_SUPPORTED,ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
 }
 --error 0,$alter_error
 --eval alter table t1 add unique key unique_1(g), $force_needed algorithm=$alter_algorithm
@@ -124,13 +124,13 @@ if (`select '$alter_algorithm' = 'instant' or  '$alter_algorithm' = 'nocopy'`)
 --eval alter table t1 drop index unique_1, $force_needed algorithm=$alter_algorithm
 if (`select '$alter_algorithm' = 'instant' or  '$alter_algorithm' = 'nocopy'`)
 {
- --let $alter_error=ER_KEY_COLUMN_DOES_NOT_EXIST
+ --let $alter_error=ER_KEY_COLUMN_DOES_NOT_EXIST,ER_ALTER_OPERATION_NOT_SUPPORTED,ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
 }
 --error 0,$alter_error
 --eval alter table t1 add fulltext  key f_1(h), $force_needed algorithm=$alter_algorithm
 if (`select '$alter_algorithm' = 'instant' or  '$alter_algorithm' = 'nocopy'`)
 {
- --let $alter_error=ER_CANT_DROP_FIELD_OR_KEY
+ --let $alter_error=ER_CANT_DROP_FIELD_OR_KEY,ER_ALTER_OPERATION_NOT_SUPPORTED,ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
 }
 --error 0,$alter_error
 --eval alter table t1  drop column f, drop column g , $force_needed algorithm=$alter_algorithm
@@ -139,7 +139,7 @@ if ($alter_algorithm == 'copy')
 --eval alter table tmp_tbl add column f int after b, $force_needed add column g int first ,add column  h varchar(100), algorithm=$alter_algorithm
 if (`select '$alter_algorithm' = 'instant' or  '$alter_algorithm' = 'nocopy'`)
 {
- --let $alter_error=ER_KEY_COLUMN_DOES_NOT_EXIST
+ --let $alter_error=ER_KEY_COLUMN_DOES_NOT_EXIST,ER_ALTER_OPERATION_NOT_SUPPORTED,ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
 }
 --error 0,$alter_error
 --eval alter table tmp_tbl add index if not exists index_1(f), $force_needed algorithm=$alter_algorithm
@@ -297,7 +297,7 @@ if (`select '$alter_algorithm' = 'instant' or  '$alter_algorithm' = 'nocopy'`)
 --eval alter table t1 add column f varchar(100) after b,add column g varchar(100) first ,add column  h char, $force_needed algorithm=$alter_algorithm
 if (`select '$alter_algorithm' = 'instant' or  '$alter_algorithm' = 'nocopy'`)
 {
- --let $alter_error=ER_KEY_COLUMN_DOES_NOT_EXIST
+ --let $alter_error=ER_KEY_COLUMN_DOES_NOT_EXIST,ER_ALTER_OPERATION_NOT_SUPPORTED,ER_ALTER_OPERATION_NOT_SUPPORTED_REASON
 }
 --error 0,$alter_error
 --eval alter table t1 add index if not exists index_1(f), $force_needed algorithm=$alter_algorithm

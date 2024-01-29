@@ -1250,7 +1250,7 @@ create table t1(f1 int not null, f2 blob)engine=innodb;
 insert into t1 values(1, repeat('a',20000));
 # Skip sort
 # Reusing the same pk
-alter table t1 force;
+alter table t1;
 affected rows: 0
 info: Records: 0  Duplicates: 0  Warnings: 0
 SELECT name, count_reset FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE
@@ -1384,7 +1384,7 @@ ddl_sort_file_alter_table	2
 SET GLOBAL innodb_monitor_reset = module_ddl;
 # Skip sort
 # Reusing the same pk
-alter table t1 force;
+alter table t1;
 affected rows: 0
 info: Records: 0  Duplicates: 0  Warnings: 0
 SELECT name, count_reset FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE
@@ -1403,8 +1403,8 @@ SET GLOBAL innodb_monitor_reset = module_ddl;
 # Skip sort
 # Reusing the same pk
 alter table t1 engine=innodb;
-affected rows: 0
-info: Records: 0  Duplicates: 0  Warnings: 0
+affected rows: 2880
+info: Records: 2880  Duplicates: 0  Warnings: 0
 SELECT name, count_reset FROM INFORMATION_SCHEMA.INNODB_METRICS WHERE
 subsystem = 'ddl' and count_reset > 0;
 name	count_reset
@@ -1978,7 +1978,7 @@ DROP TABLE t1;
 #
 CREATE TABLE t1(a INT, b INT AS (a), KEY(a, b DESC)) ENGINE=InnoDB;
 ALTER TABLE t1 RENAME COLUMN IF EXISTS b TO v;
-ALTER TABLE t1 FORCE;
+ALTER TABLE t1;
 DROP TABLE t1;
 #
 #  MDEV-27592 DESC primary index fails to set wide format

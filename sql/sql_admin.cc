@@ -48,7 +48,8 @@ const LEX_CSTRING msg_optimize= { STRING_WITH_LEN("optimize") };
 /* Prepare, run and cleanup for mysql_recreate_table() */
 
 static bool admin_recreate_table(THD *thd, TABLE_LIST *table_list,
-                                 Recreate_info *recreate_info)
+                                 Recreate_info *recreate_info,
+                                 bool partition_admin, bool table_copy)
 {
   bool result_code;
   DBUG_ENTER("admin_recreate_table");
@@ -69,7 +70,8 @@ static bool admin_recreate_table(THD *thd, TABLE_LIST *table_list,
   DEBUG_SYNC(thd, "ha_admin_try_alter");
   tmp_disable_binlog(thd); // binlogging is done by caller if wanted
   result_code= (thd->open_temporary_tables(table_list) ||
-                mysql_recreate_table(thd, table_list, recreate_info, false));
+                mysql_recreate_table(thd, table_list, recreate_info,
+                                     partition_admin, table_copy));
   reenable_binlog(thd);
   /*
     mysql_recreate_table() can push OK or ERROR.
@@ -867,12 +869,16 @@ static bool mysql_admin_table(THD* thd, TABLE_LIST* tables,
       int check_for_upgrade= file->ha_check_for_upgrade(check_opt);
 
       if (check_old_types == HA_ADMIN_NEEDS_ALTER ||
-          check_for_upgrade == HA_ADMIN_NEEDS_ALTER)
+          check_old_types == HA_ADMIN_NEEDS_DATA_CONVERSION ||
+          check_for_upgrade == HA_ADMIN_NEEDS_ALTER ||
+          check_for_upgrade == HA_ADMIN_NEEDS_DATA_CONVERSION)
       {
         /* We use extra_open_options to be able to open crashed tables */
         thd->open_options|= extra_open_options;
-        result_code= admin_recreate_table(thd, table, &recreate_info) ?
-                     HA_ADMIN_FAILED : HA_ADMIN_OK;
+        result_code= (admin_recreate_table(thd, table, &recreate_info,
+                                           (lex->alter_info.partition_flags &
+                                            ALTER_PARTITION_ADMIN), 1) ?
+                      HA_ADMIN_FAILED : HA_ADMIN_OK);
         thd->open_options&= ~extra_open_options;
         goto send_result;
       }
@@ -905,7 +911,7 @@ static bool mysql_admin_table(THD* thd, TABLE_LIST* tables,
       */
       collect_eis=
         (table->table->s->table_category == TABLE_CATEGORY_USER &&
-        !(lex->alter_info.flags & ALTER_PARTITION_ADMIN) &&
+        !(lex->alter_info.partition_flags & ALTER_PARTITION_ADMIN) &&
          (check_eits_collection_allowed(thd) ||
           lex->with_persistent_for_clause));
     }
@@ -1094,7 +1100,9 @@ static bool mysql_admin_table(THD* thd, TABLE_LIST* tables,
         repair was not implemented and we need to upgrade the table
         to a new version so we recreate the table with ALTER TABLE
       */
-      result_code= admin_recreate_table(thd, table, &recreate_info);
+      result_code= admin_recreate_table(thd, table, &recreate_info,
+                                        (lex->alter_info.partition_flags &
+                                         ALTER_PARTITION_ADMIN), 1);
     }
 send_result:
 
@@ -1229,7 +1237,9 @@ send_result_message:
                  *save_next_global= table->next_global;
       table->next_local= table->next_global= 0;
 
-      result_code= admin_recreate_table(thd, table, &recreate_info);
+      result_code= admin_recreate_table(thd, table, &recreate_info,
+                                        (lex->alter_info.partition_flags &
+                                         ALTER_PARTITION_ADMIN), 0);
       trans_commit_stmt(thd);
       trans_commit(thd);
       close_thread_tables(thd);
@@ -1312,6 +1322,7 @@ send_result_message:
     }
 
     case HA_ADMIN_NEEDS_UPGRADE:
+    case HA_ADMIN_NEEDS_DATA_CONVERSION:
     case HA_ADMIN_NEEDS_ALTER:
     {
       char buf[MYSQL_ERRMSG_SIZE];
@@ -1320,7 +1331,7 @@ send_result_message:
           table->table->file->ha_table_flags() & HA_CAN_REPAIR ? "TABLE" : 0;
 
       protocol->store(&error_clex_str, system_charset_info);
-      if (what_to_upgrade && result_code != HA_ADMIN_NEEDS_ALTER)
+      if (what_to_upgrade && result_code == HA_ADMIN_NEEDS_UPGRADE)
         length= my_snprintf(buf, sizeof(buf),
                             ER_THD(thd, ER_TABLE_NEEDS_UPGRADE),
                             what_to_upgrade, table->table_name.str);
@@ -1613,7 +1624,10 @@ bool Sql_cmd_optimize_table::execute(THD *thd)
 
   WSREP_TO_ISOLATION_BEGIN_WRTCHK(NULL, NULL, first_table);
   res= (specialflag & SPECIAL_NO_NEW_FUNC) ?
-    mysql_recreate_table(thd, first_table, &recreate_info, true) :
+    mysql_recreate_table(thd, first_table, &recreate_info,
+                         (thd->lex->alter_info.partition_flags &
+                          ALTER_PARTITION_ADMIN),
+                         false) :
     mysql_admin_table(thd, first_table, &m_lex->check_opt,
                       &msg_optimize, TL_WRITE, 1, 0, 0, 0,
                       &handler::ha_optimize, 0, true);

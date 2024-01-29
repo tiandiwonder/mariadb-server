@@ -398,7 +398,7 @@ INSERT INTO t1 VALUES (155, 45, 55);
 #during OPTIMIZE TABLE operation for INNODB tables.
 connection default;
 #OPTIMIZE TABLE operation.
-OPTIMIZE TABLE t1;
+alter table t1 force, algorithm=inplace;;
 connection con1;
 SET DEBUG_SYNC= 'now WAIT_FOR downgraded';
 # With the patch, concurrent DML operation succeeds.
@@ -410,9 +410,6 @@ fld1	fld2	fld3
 10	11	12
 SET DEBUG_SYNC= 'now SIGNAL continue';
 connection default;
-Table	Op	Msg_type	Msg_text
-test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
-test.t1	optimize	status	OK
 DROP TABLE t1;
 SET DEBUG_SYNC= 'RESET';
 #Concurrent INSERT, UPDATE, SELECT and DELETE is supported
@@ -422,7 +419,7 @@ SET DEBUG_SYNC= 'alter_table_inplace_after_lock_downgrade SIGNAL downgraded WAIT
 CREATE TABLE t1(fld1 INT) ENGINE= INNODB PARTITION BY HASH(fld1) PARTITIONS 4;
 INSERT INTO t1 VALUES(10);
 #OPTIMIZE TABLE operation.
-OPTIMIZE TABLE t1;
+ALTER TABLE t1 FORCE, algorithm=inplace;;
 connection con1;
 SET DEBUG_SYNC= 'now WAIT_FOR downgraded';
 # With the patch, concurrent DML operation succeeds.
@@ -434,9 +431,6 @@ fld1
 30
 SET DEBUG_SYNC= 'now SIGNAL continue';
 connection default;
-Table	Op	Msg_type	Msg_text
-test.t1	optimize	note	Table does not support optimize, doing recreate + analyze instead
-test.t1	optimize	status	OK
 DROP TABLE t1;
 SET DEBUG_SYNC= 'RESET';
 #ALTER TABLE FORCE and ALTER TABLE ENGINE uses online rebuild
@@ -444,11 +438,11 @@ SET DEBUG_SYNC= 'RESET';
 CREATE TABLE t1(fld1 INT, fld2 INT) ENGINE=INNODB;
 INSERT INTO t1 VALUES(10, 20);
 ALTER TABLE t1 FORCE;
-affected rows: 0
-info: Records: 0  Duplicates: 0  Warnings: 0
+affected rows: 1
+info: Records: 1  Duplicates: 0  Warnings: 0
 ALTER TABLE t1 ENGINE=INNODB;
-affected rows: 0
-info: Records: 0  Duplicates: 0  Warnings: 0
+affected rows: 1
+info: Records: 1  Duplicates: 0  Warnings: 0
 #ALTER TABLE FORCE, ALTER TABLE ENGINE and OPTIMIZE TABLE uses
 #table copy when the alter_algorithm enabled.
 SET SESSION alter_algorithm= TRUE;
@@ -556,19 +550,11 @@ SET DEBUG_SYNC= 'RESET';
 ALTER TABLE t1;
 affected rows: 0
 info: Records: 0  Duplicates: 0  Warnings: 0
-SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL rebuild';
-# Check that we rebuild the table
-ALTER TABLE t1 engine=innodb;
-connection con1;
-SET DEBUG_SYNC= 'now WAIT_FOR rebuild';
-connection default;
 SET DEBUG_SYNC= 'RESET';
 SET DEBUG_SYNC = 'row_log_table_apply1_before SIGNAL rebuild';
 # Check that we rebuild the table
+ALTER TABLE t1 engine=innodb;
 ALTER TABLE t1 FORCE;
-connection con1;
-SET DEBUG_SYNC= 'now WAIT_FOR rebuild';
-connection default;
 disconnect con1;
 SET DEBUG_SYNC= 'RESET';
 DROP TABLE t1;

@@ -44,15 +44,15 @@ ALTER TABLE t1 ADD COLUMN f6 INT NOT NULL;
 ALTER TABLE t1 ADD COLUMN f7 INT NOT NULL after f3;
 
 --echo # Force the table to rebuild
---error $error_code
 ALTER TABLE t1 FORCE;
+--error $error_code
+--eval ALTER TABLE t1 FORCE, algorithm=$algorithm
 
 --echo # Row format changes
 --error $error_code
 ALTER TABLE t1 ROW_FORMAT=COMPRESSED;
 
 --echo # Engine table
---error $error_code
 ALTER TABLE t1 ENGINE=INNODB;
 
 # Irrespective of alter_algorithm value, the following command

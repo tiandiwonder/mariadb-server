@@ -33,6 +33,9 @@ info: Records: 1  Duplicates: 0  Warnings: 0
 ALTER TABLE t1 FORCE;
 affected rows: 1
 info: Records: 1  Duplicates: 0  Warnings: 0
+ALTER TABLE t1 FORCE, algorithm=COPY;
+affected rows: 1
+info: Records: 1  Duplicates: 0  Warnings: 0
 # Row format changes
 ALTER TABLE t1 ROW_FORMAT=COMPRESSED;
 affected rows: 1
