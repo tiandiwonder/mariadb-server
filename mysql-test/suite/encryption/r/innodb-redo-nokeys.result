@@ -40,6 +40,6 @@ SELECT * FROM INFORMATION_SCHEMA.ENGINES
 WHERE engine = 'innodb'
 AND support IN ('YES', 'DEFAULT', 'ENABLED');
 ENGINE	SUPPORT	COMMENT	TRANSACTIONS	XA	SAVEPOINTS
-FOUND 1 /\[ERROR\] InnoDB: Encryption key is not found for .*test.t1.ibd/ in mysqld.1.err
+FOUND 1 /\[ERROR\] InnoDB: Encryption key is not found for .*test.t[1-5].ibd/ in mysqld.1.err
 # restart: --file-key-management-filename=MYSQL_TEST_DIR/std_data/keys2.txt
 drop table t1,t2,t3,t4,t5;
