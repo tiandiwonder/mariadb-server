@@ -14457,6 +14457,17 @@ bool fk_handle_rename(THD *thd, TABLE_LIST *old_table, const LEX_CSTRING *new_db
         goto mem_error;
       continue;
     }
+    if (0 == cmp_table(fk.ref_db(), *new_db) &&
+        0 == cmp_table(fk.referenced_table, *new_table_name))
+    {
+      /*
+        This FK was added (or referenced_table was dropped) under FOREIGN_KEY_CHECKS=0.
+        Now this FK becomes self-ref. Note that any tables that already reference
+        (new_db, new_table_table) don't need to be locked as we don't change reference
+        in them.
+      */
+      continue;
+    }
     if (!tables.insert(fk.ref_table(thd->mem_root)))
       goto mem_error;
   }
