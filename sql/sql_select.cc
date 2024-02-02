@@ -33598,6 +33598,9 @@ bool Sql_cmd_dml::execute(THD *thd)
 
   MYSQL_DML_DONE(thd, res);
 
+  if (result)
+    delete result;
+
   return res;
 
 err:
@@ -33607,6 +33610,8 @@ err:
   (void)unit->cleanup();
   if (is_prepared())
     unprepare(thd);
+  if (result)
+    delete result;
 
   return thd->is_error();
 }
