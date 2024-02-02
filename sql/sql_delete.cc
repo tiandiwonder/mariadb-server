@@ -1829,7 +1829,6 @@ bool Sql_cmd_delete::execute_inner(THD *thd)
   if (result)
   {
     res= false;
-    delete result;
   }
 
   return res;

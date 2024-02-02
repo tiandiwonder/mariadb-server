@@ -3093,7 +3093,6 @@ bool Sql_cmd_update::execute_inner(THD *thd)
   if (result)
   {
     res= false;
-    delete result;
   }
 
   return res;
