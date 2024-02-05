@@ -11,7 +11,19 @@ ERROR HY000: Schema mismatch (ROW_FORMAT mismatch)
 CREATE TABLE imp_t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
 ERROR 42S01: Table 'imp_t1' already exists
 DROP TABLE imp_t1;
-CREATE TABLE imp_t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
+CREATE TABLE imp_t1 (a INT PRIMARY KEY) ENGINE=InnoDB ROW_FORMAT=REDUNDANT;
+ALTER TABLE imp_t1 DISCARD TABLESPACE;
+FLUSH TABLES t1 FOR EXPORT;
+UNLOCK TABLES;
+SET DEBUG_DBUG="+d,import_dict_error";
+ALTER TABLE imp_t1 IMPORT TABLESPACE;
+ERROR 23000: Can't write; duplicate key in table 'imp_t1'
+SHOW CREATE TABLE imp_t1;
+Table	Create Table
+imp_t1	CREATE TABLE `imp_t1` (
+  `a` int(11) NOT NULL,
+  PRIMARY KEY (`a`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci ROW_FORMAT=REDUNDANT
 DROP TABLE imp_t1, t1;
 SET GLOBAL innodb_checksum_algorithm=@save_innodb_checksum_algorithm;
 #

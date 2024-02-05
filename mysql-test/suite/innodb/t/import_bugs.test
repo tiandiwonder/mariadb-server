@@ -17,7 +17,19 @@ ALTER TABLE imp_t1 IMPORT TABLESPACE;
 --error ER_TABLE_EXISTS_ERROR
 CREATE TABLE imp_t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
 DROP TABLE imp_t1;
-CREATE TABLE imp_t1 (a INT PRIMARY KEY) ENGINE=InnoDB;
+
+CREATE TABLE imp_t1 (a INT PRIMARY KEY) ENGINE=InnoDB ROW_FORMAT=REDUNDANT;
+ALTER TABLE imp_t1 DISCARD TABLESPACE;
+FLUSH TABLES t1 FOR EXPORT;
+let $datadir=`select @@datadir`;
+--copy_file $datadir/test/t1.ibd $datadir/test/imp_t1.ibd
+UNLOCK TABLES;
+
+SET DEBUG_DBUG="+d,import_dict_error";
+--error ER_DUP_KEY
+ALTER TABLE imp_t1 IMPORT TABLESPACE;
+
+SHOW CREATE TABLE imp_t1;
 DROP TABLE imp_t1, t1;
 
 SET GLOBAL innodb_checksum_algorithm=@save_innodb_checksum_algorithm;

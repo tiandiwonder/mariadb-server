@@ -196,6 +196,57 @@ struct row_import {
 
 	dberr_t match_flags(THD *thd) const ;
 
+	ulint find_fts_idx_offset() const
+	{
+	  for (ulint i= 0; i < m_n_indexes; i++)
+	  {
+            const char* index_name= reinterpret_cast<const char*>(
+                                      m_indexes[i].m_name);
+	    if (!strcmp(index_name, FTS_DOC_ID_INDEX_NAME))
+              return i;
+	  }
+	  return ULINT_UNDEFINED;
+	}
+
+        row_index_t *find_index_by_name(const char *name) const
+	{
+	  for (ulint i= 0; i < m_n_indexes; i++)
+	  {
+            const char* index_name= reinterpret_cast<const char*>(
+                                      m_indexes[i].m_name);
+	    if (index_name && !strcmp(index_name, name))
+              return &m_indexes[i];
+	  }
+	  return nullptr;
+	}
+
+	/** @return whether cfg file has FTS_DOC_ID
+	& FTS_DOC_ID_INDEX_NAME*/
+	bool has_hidden_fts() const
+	{
+          if (m_missing) return false;
+          ulint col_offset= find_col(FTS_DOC_ID_COL_NAME);
+	  if (col_offset == ULINT_UNDEFINED) return false;
+
+	  dict_col_t *col= &m_cols[col_offset];
+	  if (col->mtype != DATA_INT
+              || !(col->prtype & (DATA_NOT_NULL
+				| DATA_UNSIGNED | DATA_BINARY_TYPE
+				| DATA_FTS_DOC_ID))
+	      || col->len != sizeof(doc_id_t))
+            return false;
+
+          row_index_t *fts_idx= find_index_by_name(FTS_DOC_ID_INDEX_NAME);
+          if (fts_idx == nullptr) return false;
+
+          dict_field_t *field= &fts_idx->m_fields[0];
+
+          if (strcmp(field->name, FTS_DOC_ID_COL_NAME)
+              || field->prefix_len != 0
+              || field->fixed_len != sizeof(doc_id_t))
+            return false;
+	  return true;
+	}
 
 	dict_table_t*	m_table;		/*!< Table instance */
 
@@ -1090,7 +1141,6 @@ row_import::find_col(
 			return(i);
 		}
 	}
-
 	return(ULINT_UNDEFINED);
 }
 
@@ -2113,14 +2163,17 @@ dberr_t PageConverter::operator()(buf_block_t* block) UNIV_NOTHROW
 	return DB_SUCCESS;
 }
 
-/*****************************************************************//**
-Clean up after import tablespace. */
-static	MY_ATTRIBUTE((nonnull, warn_unused_result))
+/** Clean up after import tablespace.
+@param  prebuilt  prebuilt from handler
+@param  err       error code
+@param  table     table or fts hidden table
+@return error code or DB_SUCCESS */
+static
 dberr_t
 row_import_cleanup(
-/*===============*/
-	row_prebuilt_t*	prebuilt,	/*!< in/out: prebuilt from handler */
-	dberr_t		err)		/*!< in: error code */
+	row_prebuilt_t*	prebuilt,
+	dberr_t		err,
+	dict_table_t*	fts_table = nullptr)
 {
 	if (err != DB_SUCCESS) {
 		dict_table_t* table = prebuilt->table;
@@ -2140,11 +2193,41 @@ row_import_cleanup(
 		     index = UT_LIST_GET_NEXT(indexes, index)) {
 			index->page = FIL_NULL;
 		}
+
+		prebuilt->trx->rollback();
+	}
+	else
+	{
+	  DBUG_EXECUTE_IF("ib_import_before_commit_crash", DBUG_SUICIDE(););
+	  prebuilt->trx->commit();
 	}
 
-	DBUG_EXECUTE_IF("ib_import_before_commit_crash", DBUG_SUICIDE(););
+	if (fts_table && fts_table != prebuilt->table) {
 
-	prebuilt->trx->commit();
+		if (err == DB_SUCCESS) {
+			/* Reload the table in case of hidden fts column */
+			const table_id_t id = prebuilt->table->id;
+			prebuilt->table->release();
+			dict_sys.remove(prebuilt->table);
+
+			prebuilt->table = dict_table_open_on_id(
+					id, true, DICT_TABLE_OP_NORMAL);
+			prebuilt->table->space = fts_table->space;
+			goto free_fts_table;
+		} else {
+free_fts_table:
+			dict_index_t *index = UT_LIST_GET_FIRST(
+						fts_table->indexes);
+			while (index) {
+				dict_index_t *next_index =
+				  UT_LIST_GET_NEXT(indexes, index);
+				dict_index_remove_from_cache(
+						fts_table, index);
+				index = next_index;
+			}
+			dict_mem_table_free(fts_table);
+		}
+	}
 
 	if (prebuilt->trx->dict_operation_lock_mode) {
 		row_mysql_unlock_data_dictionary(prebuilt->trx);
@@ -2157,14 +2240,17 @@ row_import_cleanup(
 	return(err);
 }
 
-/*****************************************************************//**
-Report error during tablespace import. */
-static	MY_ATTRIBUTE((nonnull, warn_unused_result))
+/** Report error during tablespace import.
+@param  prebuilt  prebuilt from the handler
+@param  err       error code
+@param  fts_table table definition containing hidden FTS_DOC_ID column
+@return error code or DB_SUCCESS */
+static
 dberr_t
 row_import_error(
-/*=============*/
-	row_prebuilt_t*	prebuilt,	/*!< in/out: prebuilt from handler */
-	dberr_t		err)		/*!< in: error code */
+	row_prebuilt_t*	prebuilt,
+	dberr_t		err,
+	dict_table_t*	fts_table=nullptr)
 {
 	if (!trx_is_interrupted(prebuilt->trx)) {
 		char	table_name[MAX_FULL_NAME_LEN + 1];
@@ -2179,7 +2265,7 @@ row_import_error(
 			table_name, (ulong) err, ut_strerr(err));
 	}
 
-	return row_import_cleanup(prebuilt, err);
+	return row_import_cleanup(prebuilt, err, fts_table);
 }
 
 /*****************************************************************//**
@@ -3071,6 +3157,151 @@ static size_t get_buf_size()
          + snappy_max_compressed_length(srv_page_size)
 #endif
       ;
+}
+
+/** Add fts index to the table
+@param table fts index to be added on the table */
+static void add_fts_index(dict_table_t *table)
+{
+  dict_index_t *fts_index= dict_mem_index_create(
+    table, FTS_DOC_ID_INDEX_NAME, DICT_UNIQUE, 2);
+  dict_hdr_get_new_id(NULL, &fts_index->id, NULL);
+  fts_index->page = FIL_NULL;
+  fts_index->cached = 1;
+  /* Add fields for FTS_DOC_ID_INDEX */
+  dict_index_add_col(
+    fts_index, table,
+    &table->cols[table->n_cols - (DATA_N_SYS_COLS + 1)], 0);
+  dict_index_t *clust_index= UT_LIST_GET_FIRST(table->indexes);
+  for (ulint i= 0; i < clust_index->n_uniq; i++)
+    dict_index_add_col(fts_index, table, clust_index->fields[i].col,
+                       clust_index->fields[i].prefix_len);
+#ifdef BTR_CUR_HASH_ADAPT
+  fts_index->search_info= btr_search_info_create(fts_index->heap);
+  fts_index->search_info->ref_count= 0;
+#endif /* BTR_CUR_HASH_ADAPT */
+  UT_LIST_ADD_LAST(fts_index->table->indexes, fts_index);
+}
+
+/** Append the hidden fts column and fts doc index to the
+existing table
+@param  table  table to be imported
+@param  thd    thread
+@param  cfg    metadata required by import
+@return table which has fts doc id and fts doc id index */
+static dict_table_t *build_fts_hidden_table(
+  dict_table_t *table, THD *thd, row_import &cfg)
+{
+  if (cfg.m_n_cols != static_cast<ulint>(table->n_cols) + 1
+      && cfg.m_n_indexes != UT_LIST_GET_LEN(table->indexes) + 1)
+    return nullptr;
+  dict_table_t *new_table= dict_table_t::create(
+    {table->name.m_name, strlen(table->name.m_name)},
+    table->space, table->n_t_cols - (DATA_N_SYS_COLS - 1),
+    table->n_v_cols, table->flags,
+    table->flags2);
+
+  new_table->id= table->id;
+  new_table->space_id= table->space_id;
+  size_t col_name_len= 0;
+  /* Copy columns from old table to new fts table */
+  for (ulint new_i= 0;
+       new_i < ulint(new_table->n_cols - (DATA_N_SYS_COLS + 1));
+       new_i++)
+  {
+    dict_mem_table_add_col(new_table, new_table->heap,
+                           &table->col_names[col_name_len],
+			   table->cols[new_i].mtype,
+			   table->cols[new_i].prtype,
+			   table->cols[new_i].len);
+    col_name_len+= strlen(&table->col_names[col_name_len]) + 1;
+  }
+
+  unsigned fts_col_ind= unsigned(table->n_cols - DATA_N_SYS_COLS);
+  fts_add_doc_id_column(new_table, new_table->heap);
+  new_table->cols[fts_col_ind].ind=
+    fts_col_ind & dict_index_t::MAX_N_FIELDS;
+  new_table->cols[fts_col_ind].ord_part= 1;
+  dict_table_add_system_columns(new_table, new_table->heap);
+
+  col_name_len= 0;
+  for (ulint new_i= 0; new_i < new_table->n_v_cols; new_i++)
+  {
+    dict_col_t old_vcol= table->v_cols[new_i].m_col;
+    ulint pos= old_vcol.ind;
+    if (old_vcol.ind <= fts_col_ind) pos++;
+    dict_mem_table_add_v_col(new_table, new_table->heap,
+                             &table->v_col_names[col_name_len],
+                             old_vcol.mtype, old_vcol.prtype,
+                             old_vcol.len, pos,
+                             table->v_cols[new_i].num_base);
+    for (ulint i= 0; i < table->v_cols[new_i].num_base; i++)
+    {
+      dict_col_t *base_col= dict_table_get_nth_col(
+        new_table, table->v_cols[new_i].base_col[i]->ind);
+      new_table->v_cols[new_i].base_col[i]= base_col;
+    }
+    col_name_len+= strlen(&table->v_col_names[col_name_len]) + 1;
+  }
+
+  /* Copy indexes from old table to new table */
+  for (dict_index_t *old_index= UT_LIST_GET_FIRST(table->indexes);
+       old_index;)
+  {
+    bool is_clustered= (old_index->type & DICT_CLUSTERED);
+    dict_index_t *new_index= dict_mem_index_create(
+      new_table, old_index->name, old_index->type,
+      is_clustered ? old_index->n_fields + 1 : old_index->n_fields);
+
+    new_index->id= old_index->id;
+    new_index->n_uniq= old_index->n_uniq;
+    new_index->type= old_index->type;
+    new_index->cached= 1;
+    /* Copy all fields from old index to new index */
+    for (ulint new_i= 0; new_i < new_index->n_fields; new_i++)
+    {
+      if (is_clustered && new_i == old_index->n_fields)
+      {
+        /* Add fts doc id in clustered index */
+        dict_index_add_col(
+          new_index, new_table, &table->cols[fts_col_ind], 0);
+        new_index->fields[new_i].fixed_len= sizeof(doc_id_t);
+        continue;
+      }
+
+      dict_field_t *field= dict_index_get_nth_field(old_index, new_i);
+      dict_col_t *col= field->col;
+      if (col->is_virtual())
+      {
+        dict_v_col_t *v_col= reinterpret_cast<dict_v_col_t*>(col);
+        col= &new_table->v_cols[v_col->v_pos].m_col;
+      }
+      else
+      {
+        unsigned ind= field->col->ind;
+        if (ind >= fts_col_ind) ind++;
+	col= &new_table->cols[ind];
+      }
+      dict_index_add_col(new_index, new_table, col,
+                         field->prefix_len);
+      if (new_i < old_index->n_uniq) col->ord_part= 1;
+    }
+
+    if (old_index->search_info)
+    {
+      new_index->search_info=
+        btr_search_info_create(new_index->heap);
+      new_index->search_info->ref_count=
+        old_index->search_info->ref_count;
+    }
+
+    UT_LIST_ADD_LAST(new_index->table->indexes, new_index);
+    old_index= UT_LIST_GET_NEXT(indexes, old_index);
+    if (UT_LIST_GET_LEN(new_table->indexes)
+        == cfg.find_fts_idx_offset())
+      add_fts_index(new_table);
+  }
+  return new_table;
 }
 
 /* find, parse instant metadata, performing variaous checks,
@@ -4246,6 +4477,86 @@ fil_tablespace_iterate(
 	return(err);
 }
 
+/**
+1) Update the position of the columns and
+2) Insert the hidden fts doc id in the sys columns table
+3) Insert the hidden fts doc id in the sys indexes and
+sys_fields table
+@param  table   table to be imported
+@param  fts_pos position of fts doc id column
+@param  trx     transaction
+@return DB_SUCCESS or error code */
+static
+dberr_t innodb_insert_hidden_fts_col(dict_table_t* table,
+                                     ulint  fts_pos,
+                                     trx_t* trx)
+{
+  dberr_t err= DB_SUCCESS;
+  pars_info_t*    info = nullptr;
+  for (ulint n= table->n_cols - 1; n >= fts_pos; n--)
+  {
+    info= pars_info_create();
+    pars_info_add_ull_literal(info, "id", table->id);
+    pars_info_add_ull_literal(info, "pos", n);
+    pars_info_add_ull_literal(info, "val", n + 1);
+    err= que_eval_sql(info,
+                    "PROCEDURE UPD_POS_COL () IS\n"
+                    "BEGIN\n"
+                    "UPDATE SYS_COLUMNS SET\n"
+                    "POS = :val\n"
+                    "WHERE TABLE_ID = :id AND POS = :pos;\n"
+                    "END;\n", trx);
+    if (err != DB_SUCCESS)
+      return err;
+  }
+
+  dict_index_t* fts_idx=
+    dict_table_get_index_on_name(table, FTS_DOC_ID_INDEX_NAME);
+  if (!fts_idx) return DB_ERROR;
+
+  info= pars_info_create();
+  dict_col_t* fts_col= &table->cols[fts_pos];
+  pars_info_add_ull_literal(info, "id", table->id);
+  pars_info_add_ull_literal(info, "idx_id", fts_idx->id);
+  pars_info_add_int4_literal(info, "pos", fts_pos);
+  pars_info_add_str_literal(info, "name", FTS_DOC_ID_COL_NAME);
+  pars_info_add_str_literal(info, "idx_name", FTS_DOC_ID_INDEX_NAME);
+  pars_info_add_int4_literal(info, "mtype", fts_col->mtype);
+  pars_info_add_int4_literal(info, "prtype", fts_col->prtype);
+  pars_info_add_int4_literal(info, "idx_type", fts_idx->type);
+  pars_info_add_int4_literal(info, "space", fts_idx->table->space_id);
+  pars_info_add_int4_literal(info, "page_no", fts_idx->page);
+  pars_info_add_int4_literal(info, "len", fts_col->len);
+  ulint n= dict_table_encode_n_col(
+    unsigned(table->n_cols) - DATA_N_SYS_COLS, table->n_v_cols)
+    | (table->flags & DICT_TF_COMPACT) << 31;
+  pars_info_add_int4_literal(info, "n", n);
+
+  return que_eval_sql(info,
+                      "PROCEDURE ADD_FTS_COL () IS\n"
+                      "BEGIN\n"
+                      "INSERT INTO SYS_COLUMNS VALUES"
+                      "(:id,:pos,:name,:mtype,:prtype,:len,0);\n"
+                      "UPDATE SYS_TABLES SET N_COLS = :n"
+		      " WHERE ID = :id;\n"
+		      "INSERT INTO SYS_INDEXES VALUES"
+		      "(:id, :idx_id, :idx_name, 1,"
+		      " :idx_type, :space, :page_no, 50);\n"
+                      "INSERT INTO SYS_FIELDS VALUES(:idx_id, 1, :name);\n"
+		      "END;\n", trx);
+}
+
+/* Need to check whether the table need to add system generated
+fts column and system generated fts document index
+@param cfg   config file
+@param table table to be imported
+@return whether the table has to add system generated fts column
+and fts index */
+bool need_hidden_fts(row_import& cfg, dict_table_t *table)
+{
+  return cfg.has_hidden_fts() && !table->fts_doc_id_index;
+}
+
 /*****************************************************************//**
 Imports a tablespace. The space id in the .ibd file must match the space id
 of the table in the data dictionary.
@@ -4271,6 +4582,7 @@ row_import_for_mysql(
 	ut_ad(trx);
 	ut_ad(trx->state == TRX_STATE_ACTIVE);
 	ut_ad(!table->is_readable());
+	ut_ad(prebuilt->table == table);
 
 	ibuf_delete_for_discarded_space(table->space_id);
 
@@ -4299,7 +4611,6 @@ row_import_for_mysql(
 
 	row_import	cfg;
 	THD* thd = trx->mysql_thd;
-
 	err = row_import_read_cfg(table, thd, cfg);
 
 	/* Check if the table column definitions match the contents
@@ -4307,8 +4618,21 @@ row_import_for_mysql(
 
 	if (err == DB_SUCCESS) {
 
+		if (need_hidden_fts(cfg, table)) {
+			dict_table_t *fts_table =
+				build_fts_hidden_table(
+					table, thd, cfg);
+			if (fts_table == nullptr) {
+				return row_import_error(
+						prebuilt, DB_ERROR);
+			}
+			table = fts_table;
+			cfg.m_table = fts_table;
+		}
+
 		if (dberr_t err = handle_instant_metadata(table, cfg)) {
-			return row_import_error(prebuilt, err);
+			return row_import_error(
+					prebuilt, err, table);
 		}
 
 		/* We have a schema file, try and match it with our
@@ -4373,7 +4697,7 @@ row_import_for_mysql(
 	}
 
 	if (err != DB_SUCCESS) {
-		return row_import_error(prebuilt, err);
+		return row_import_error(prebuilt, err, table);
 	}
 
 	trx->op_info = "importing tablespace";
@@ -4424,7 +4748,7 @@ row_import_for_mysql(
 				table_name, ut_strerr(err));
 		}
 
-		return row_import_cleanup(prebuilt, err);
+		return row_import_cleanup(prebuilt, err, table);
 	}
 
 	/* If the table is stored in a remote tablespace, we need to
@@ -4548,9 +4872,9 @@ row_import_for_mysql(
 	/* Ensure that all pages dirtied during the IMPORT make it to disk.
 	The only dirty pages generated should be from the pessimistic purge
 	of delete marked records that couldn't be purged in Phase I. */
-	while (buf_flush_list_space(prebuilt->table->space));
+	while (buf_flush_list_space(table->space));
 
-	for (ulint count = 0; prebuilt->table->space->referenced(); count++) {
+	for (ulint count = 0; table->space->referenced(); count++) {
 		/* Issue a warning every 10.24 seconds, starting after
 		2.56 seconds */
 		if ((count & 511) == 128) {
@@ -4561,16 +4885,26 @@ row_import_for_mysql(
 	}
 
 	ib::info() << "Phase IV - Flush complete";
-	prebuilt->table->space->set_imported();
+	table->space->set_imported();
 
+	lock_sys_tables(trx);
 	/* The dictionary latches will be released in in row_import_cleanup()
 	after the transaction commit, for both success and error. */
 
 	row_mysql_lock_data_dictionary(trx);
 
+	if (prebuilt->table != table)
+	{
+	  /* Add fts_doc_id and fts_doc_idx in data dictionary */
+          err= innodb_insert_hidden_fts_col(
+                 table, cfg.find_col(FTS_DOC_ID_COL_NAME), trx);
+	  if (err != DB_SUCCESS)
+            return row_import_error(prebuilt, err);
+	}
 	/* Update the root pages of the table's indexes. */
 	err = row_import_update_index_root(trx, table, false);
 
+        DBUG_EXECUTE_IF("import_dict_error", err= DB_DUPLICATE_KEY;);
 	if (err != DB_SUCCESS) {
 		return row_import_error(prebuilt, err);
 	}
@@ -4594,5 +4928,5 @@ row_import_for_mysql(
 		btr_write_autoinc(dict_table_get_first_index(table), autoinc);
 	}
 
-	return row_import_cleanup(prebuilt, err);
+	return row_import_cleanup(prebuilt, err, table);
 }
